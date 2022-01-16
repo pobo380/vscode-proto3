@@ -4,6 +4,7 @@ import vscode = require('vscode');
 import path = require('path');
 import fs = require('fs');
 import os = require('os');
+import process = require('process');
 
 export class Proto3Configuration {
 
@@ -161,8 +162,12 @@ class ConfigurationResolver {
                 return match && match.indexOf('env.') > 0 ? '' : match;
             }
         });
+        const resolvePlatformString = this.resolvePlatformVariable(resolvedString);
+        return this.resolveConfigVariable(resolvePlatformString, originalValue);
+    }
 
-        return this.resolveConfigVariable(resolvedString, originalValue);
+    private resolvePlatformVariable(value: string): string {
+        return value.replace('${platform}', process.platform);
     }
 
     private resolveConfigVariable(value: string, originalValue: string): string {
