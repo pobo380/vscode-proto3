@@ -32,7 +32,7 @@ export class Proto3Configuration {
         let activeEditorUri = activeEditor.document.uri;
         let activeWorkspaceFolder = vscode.workspace.getWorkspaceFolder(activeEditorUri);
         return this._configResolver.resolve(
-            this._config.get<string>('compile_all_path', activeWorkspaceFolder.uri.path));
+            this._config.get<string>('compile_all_path', activeWorkspaceFolder.uri.fsPath));
     }
 
     public getProtocArgs(): string[] {
