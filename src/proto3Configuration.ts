@@ -56,7 +56,7 @@ export class Proto3Configuration {
     public getAllProtoPaths(): string[] {
         return this.useAbsolutePath() ?
             ProtoFinder.fromDirAbsolute(this.getProtoSourcePath()) :
-            this.getProtocArgFiles().concat(ProtoFinder.fromDir(this.getProtoSourcePath()));
+            ProtoFinder.fromDir(this.getProtoSourcePath());
     }
 
     public getTmpJavaOutOption(): string {

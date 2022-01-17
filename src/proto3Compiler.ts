@@ -73,6 +73,7 @@ export class Proto3Compiler {
         }
         opts = Object.assign(opts, { cwd: vscode.workspace.rootPath });
         cp.execFile(protocPath, args, opts, (err, stdout, stderr) => {
+            console.log(args);
             if (err && stdout.length == 0 && stderr.length == 0) {
                 // Assume the OS error if no messages to buffers because
                 // "err" does not provide error type info.
