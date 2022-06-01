@@ -23,7 +23,7 @@
     "onCommand:proto3.compile.one",
     "onCommand:proto3.compile.all"
   ],
-  "main": "./out/src/proto3Main",
+  "main": "./out/main.js",
   "contributes": {
     "commands": [
       {
@@ -98,14 +98,17 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "tsc -p ./",
-    "compile": "tsc -watch -p ./",
-    "prepare": "husky install"
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/proto3Main.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "test-compile": "tsc -p ./"
   },
   "devDependencies": {
     "@types/mocha": "^2.2.32",
     "@types/node": "^6.14.9",
     "@types/vscode": "^1.50.0",
+    "esbuild": "^0.14.42",
     "husky": "^7.0.1",
     "mocha": "^6.2.2",
     "prettier": "^2.3.2",
