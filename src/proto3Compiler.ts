@@ -3,6 +3,7 @@
 import vscode = require('vscode');
 import path = require('path');
 import cp = require('child_process');
+import fse = require('fs-extra');
 
 import { Proto3Configuration } from './proto3Configuration';
 
@@ -22,6 +23,13 @@ export class Proto3Compiler {
     }
 
     public compileAllProtos() {
+        if (this._config.cleanOutputDirBeforeCompile()) {
+            for (var dir of this._config.getProtocOutputDirs()) {
+                console.log(dir);
+                fse.emptyDirSync(vscode.workspace.rootPath + "/" + dir);
+            }
+        }
+
         let args = this._config.getProtocOptions();
         if (this._config.compileOneByOne()) {
             this._config.getAllProtoPaths().forEach(proto => {

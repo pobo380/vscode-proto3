@@ -53,6 +53,12 @@ export class Proto3Configuration {
             .filter(opt => opt.startsWith('--proto_path') || opt.startsWith('-I'));
     }
 
+    public getProtocOutputDirs(): string[] {
+        return this.getProtocOptions()
+            .filter(opt => opt.match(/^--.+_out=.+$/))
+            .map(opt => opt.split('_out=')[1].split(':').reverse()[0]);
+    }
+
     public getAllProtoPaths(): string[] {
         return this.useAbsolutePath() ?
             ProtoFinder.fromDirAbsolute(this.getProtoSourcePath()) :
@@ -73,6 +79,10 @@ export class Proto3Configuration {
 
     public compileOneByOne(): boolean {
         return this._config.get<boolean>('compile_one_by_one', true);
+    }
+
+    public cleanOutputDirBeforeCompile(): boolean {
+        return this._config.get<boolean>('clean_output_dir_before_compile', false);
     }
 }
 
