@@ -4,6 +4,7 @@ import vscode = require('vscode');
 import path = require('path');
 import fs = require('fs');
 import os = require('os');
+import process = require('process');
 
 export class Proto3Configuration {
 
@@ -31,7 +32,7 @@ export class Proto3Configuration {
         let activeEditorUri = activeEditor.document.uri;
         let activeWorkspaceFolder = vscode.workspace.getWorkspaceFolder(activeEditorUri);
         return this._configResolver.resolve(
-            this._config.get<string>('compile_all_path', activeWorkspaceFolder.uri.path));
+            this._config.get<string>('compile_all_path', activeWorkspaceFolder.uri.fsPath));
     }
 
     public getProtocArgs(): string[] {
@@ -52,10 +53,16 @@ export class Proto3Configuration {
             .filter(opt => opt.startsWith('--proto_path') || opt.startsWith('-I'));
     }
 
+    public getProtocOutputDirs(): string[] {
+        return this.getProtocOptions()
+            .filter(opt => opt.match(/^--.+_out=.+$/))
+            .map(opt => opt.split('_out=')[1].split(':').reverse()[0]);
+    }
+
     public getAllProtoPaths(): string[] {
         return this.useAbsolutePath() ?
             ProtoFinder.fromDirAbsolute(this.getProtoSourcePath()) :
-            this.getProtocArgFiles().concat(ProtoFinder.fromDir(this.getProtoSourcePath()));
+            ProtoFinder.fromDir(this.getProtoSourcePath());
     }
 
     public getTmpJavaOutOption(): string {
@@ -69,15 +76,23 @@ export class Proto3Configuration {
     public useAbsolutePath(): boolean {
         return this._config.get<boolean>('use_absolute_path', false);
     }
+
+    public compileOneByOne(): boolean {
+        return this._config.get<boolean>('compile_one_by_one', true);
+    }
+
+    public cleanOutputDirBeforeCompile(): boolean {
+        return this._config.get<boolean>('clean_output_dir_before_compile', false);
+    }
 }
 
 class ProtoFinder {
     static fromDir(root: string): string[] {
-        let search = function(dir: string): string[] {
+        let search = function (dir: string): string[] {
             let files = fs.readdirSync(dir);
 
             let protos = files.filter(file => file.endsWith('.proto'))
-                          .map(file => path.join(path.relative(root, dir), file));
+                .map(file => path.join(path.relative(root, dir), file));
 
             files.map(file => path.join(dir, file))
                 .filter(file => fs.statSync(file).isDirectory())
@@ -91,7 +106,7 @@ class ProtoFinder {
     }
 
     static fromDirAbsolute(root: string): string[] {
-        let files : string[] = [];
+        let files: string[] = [];
         const getFilesRecursively = (directory) => {
             const filesInDirectory = fs.readdirSync(directory);
             for (const file of filesInDirectory) {
@@ -115,12 +130,12 @@ class ConfigurationResolver {
 
     constructor(private readonly workspaceFolder?: vscode.WorkspaceFolder) {
         Object.keys(process.env).forEach(key => {
-			this[`env.${key}`] = process.env[key];
-		});
+            this[`env.${key}`] = process.env[key];
+        });
     }
 
-	public resolve(value: string): string;
-	public resolve(value: string[]): string[];
+    public resolve(value: string): string;
+    public resolve(value: string[]): string[];
     public resolve(value: any): any {
         if (typeof value === 'string') {
             return this.resolveString(value);
@@ -143,55 +158,59 @@ class ConfigurationResolver {
     }
 
     private resolveArray(value: string[]): string[] {
-		return value.map(s => this.resolveString(s));
-	}
+        return value.map(s => this.resolveString(s));
+    }
 
     private resolveString(value: string): string {
-		let regexp = /\$\{(.*?)\}/g;
-		const originalValue = value;
-		const resolvedString = value.replace(regexp, (match: string, name: string) => {
-			let newValue = (<any>this)[name];
-			if (typeof newValue === 'string') {
-				return newValue;
-			} else {
-				return match && match.indexOf('env.') > 0 ? '' : match;
-			}
-		});
+        let regexp = /\$\{(.*?)\}/g;
+        const originalValue = value;
+        const resolvedString = value.replace(regexp, (match: string, name: string) => {
+            let newValue = (<any>this)[name];
+            if (typeof newValue === 'string') {
+                return newValue;
+            } else {
+                return match && match.indexOf('env.') > 0 ? '' : match;
+            }
+        });
+        const resolvePlatformString = this.resolvePlatformVariable(resolvedString);
+        return this.resolveConfigVariable(resolvePlatformString, originalValue);
+    }
 
-		return this.resolveConfigVariable(resolvedString, originalValue);
-	}
+    private resolvePlatformVariable(value: string): string {
+        return value.replace('${platform}', process.platform);
+    }
 
     private resolveConfigVariable(value: string, originalValue: string): string {
-		let regexp = /\$\{config\.(.+?)\}/g;
-		return value.replace(regexp, (match: string, name: string) => {
-			let config = vscode.workspace.getConfiguration(undefined, this.workspaceFolder);
-			let newValue: any;
-			try {
-				const keys: string[] = name.split('.');
-				if (!keys || keys.length <= 0) {
-					return '';
-				}
-				while (keys.length > 1) {
-					const key = keys.shift();
-					if (!config || !config.hasOwnProperty(key)) {
-						return '';
-					}
-					config = config[key];
-				}
-				newValue = config && config.hasOwnProperty(keys[0]) ? config[keys[0]] : '';
-			} catch (e) {
-				return '';
-			}
-			if (typeof newValue === 'string') {
-				// Prevent infinite recursion and also support nested references (or tokens)
-				return newValue === originalValue ? '' : this.resolveString(newValue);
-			} else {
-				return this.resolve(newValue) + '';
-			}
-		});
-	}
+        let regexp = /\$\{config\.(.+?)\}/g;
+        return value.replace(regexp, (match: string, name: string) => {
+            let config = vscode.workspace.getConfiguration(undefined, this.workspaceFolder);
+            let newValue: any;
+            try {
+                const keys: string[] = name.split('.');
+                if (!keys || keys.length <= 0) {
+                    return '';
+                }
+                while (keys.length > 1) {
+                    const key = keys.shift();
+                    if (!config || !config.hasOwnProperty(key)) {
+                        return '';
+                    }
+                    config = config[key];
+                }
+                newValue = config && config.hasOwnProperty(keys[0]) ? config[keys[0]] : '';
+            } catch (e) {
+                return '';
+            }
+            if (typeof newValue === 'string') {
+                // Prevent infinite recursion and also support nested references (or tokens)
+                return newValue === originalValue ? '' : this.resolveString(newValue);
+            } else {
+                return this.resolve(newValue) + '';
+            }
+        });
+    }
 
     private get workspaceRoot(): string {
-		return vscode.workspace.rootPath;
+        return vscode.workspace.rootPath;
     }
 }

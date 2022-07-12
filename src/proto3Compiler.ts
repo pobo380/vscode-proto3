@@ -3,6 +3,7 @@
 import vscode = require('vscode');
 import path = require('path');
 import cp = require('child_process');
+import fse = require('fs-extra');
 
 import { Proto3Configuration } from './proto3Configuration';
 
@@ -22,13 +23,26 @@ export class Proto3Compiler {
     }
 
     public compileAllProtos() {
+        if (this._config.cleanOutputDirBeforeCompile()) {
+            for (var dir of this._config.getProtocOutputDirs()) {
+                console.log(dir);
+                fse.emptyDirSync(vscode.workspace.rootPath + "/" + dir);
+            }
+        }
+
         let args = this._config.getProtocOptions();
-        // Compile in batch produces errors. Must be 1 by 1.
-        this._config.getAllProtoPaths().forEach(proto => {
-            this.runProtoc(args.concat(proto), undefined, (stdout, stderr) => {
+        if (this._config.compileOneByOne()) {
+            this._config.getAllProtoPaths().forEach(proto => {
+                this.runProtoc(args.concat(proto), undefined, (stdout, stderr) => {
+                    vscode.window.showErrorMessage(stderr);
+                });
+            })
+        }
+        else {
+            this.runProtoc(args.concat(this._config.getAllProtoPaths()), undefined, (stdout, stderr) => {
                 vscode.window.showErrorMessage(stderr);
             });
-        })
+        }
     }
 
     public compileActiveProto() {
@@ -43,11 +57,11 @@ export class Proto3Compiler {
         }
     }
 
-    public compileProtoToTmp(fileName: string, callback?: (stderr: string) =>void) {
+    public compileProtoToTmp(fileName: string, callback?: (stderr: string) => void) {
         let proto = path.relative(vscode.workspace.rootPath, fileName);
 
         let args = this._config.getProtoPathOptions()
-                .concat(this._config.getTmpJavaOutOption(), proto);
+            .concat(this._config.getTmpJavaOutOption(), proto);
 
         this.runProtoc(args, undefined, (stdout, stderr) => {
             if (callback) {
@@ -56,18 +70,19 @@ export class Proto3Compiler {
         });
     }
 
-    private runProtoc(args: string[], opts?: cp.ExecFileOptions, callback?: (stdout: string, stderr: string) =>void) {
+    private runProtoc(args: string[], opts?: cp.ExecFileOptions, callback?: (stdout: string, stderr: string) => void) {
         let protocPath = this._config.getProtocPath(this._isProtocInPath)
         if (protocPath == "?") {
             return // protoc is not configured
         }
 
-        if( !opts ) {
+        if (!opts) {
             opts = {};
         }
-        opts = Object.assign(opts, {cwd: vscode.workspace.rootPath});
+        opts = Object.assign(opts, { cwd: vscode.workspace.rootPath });
         cp.execFile(protocPath, args, opts, (err, stdout, stderr) => {
-            if(err && stdout.length == 0 && stderr.length == 0) {
+            console.log(args);
+            if (err && stdout.length == 0 && stderr.length == 0) {
                 // Assume the OS error if no messages to buffers because
                 // "err" does not provide error type info.
                 vscode.window.showErrorMessage(err.message);
